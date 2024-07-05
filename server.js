@@ -1,115 +1,221 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const bodyParser = require('body-parser');
+document.addEventListener('DOMContentLoaded', function () {
+  const toggler = document.getElementById('navbar-toggler');
+  const navMenu = document.getElementById('navbar-nav');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(bodyParser.json());
-
-// Conexión a MongoDB Atlas
-const mongoURI = 'mongodb://zkn:zkn1322@ac-b8lk0cs-shard-00-00.36avb4f.mongodb.net:27017,ac-b8lk0cs-shard-00-01.36avb4f.mongodb.net:27017,ac-b8lk0cs-shard-00-02.36avb4f.mongodb.net:27017/patentesD?replicaSet=atlas-6hvucv-shard-0&ssl=true&authSource=admin';
-
-mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('Conectado a MongoDB Atlas'))
-.catch(err => console.error('Error al conectar a MongoDB Atlas', err));
-
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'Error de conexión a MongoDB:'));
-db.once('open', () => {
-  console.log('Conexión establecida con MongoDB Atlas');
-});
-
-// Esquema y modelo de usuario
-const usuarioSchema = new mongoose.Schema({
-  nombre: String,
-  contraseña: String,
-  numeroPatente: String,
-  numeroTelefono: String,
-  correoInstitucional: String
-}, { collection: 'usuarios' });
-
-const Usuario = mongoose.model('Usuario', usuarioSchema, 'usuarios');
-
-// Esquema y modelo para consultasRegistradas (actualizado)
-const consultaSchema = new mongoose.Schema({
-  correoUsuario: String,
-  numeroPatente: String,
-  fechaConsulta: { type: Date, default: Date.now }
-}, { collection: 'consultasRegistradas' });
-
-const ConsultaRegistrada = mongoose.model('ConsultaRegistrada', consultaSchema, 'consultasRegistradas');
-
-// Ruta para obtener todos los usuarios
-app.get('/usuarios', async (req, res) => {
-  try {
-    const usuarios = await Usuario.find({}).maxTimeMS(10000);
-    res.json(usuarios);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Ruta para registrar un nuevo usuario
-app.post('/usuarios', async (req, res) => {
-  try {
-    const nuevoUsuario = new Usuario(req.body);
-    const usuarioGuardado = await nuevoUsuario.save();
-    res.status(201).json(usuarioGuardado);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Ruta para registrar una consulta (actualizada)
-app.post('/consultasRegistradas', async (req, res) => {
-  try {
-    const { correoUsuario, numeroPatente } = req.body;
-    const nuevaConsulta = new ConsultaRegistrada({
-      correoUsuario,
-      numeroPatente
-      // fechaConsulta se agregará automáticamente
+  if (toggler) {
+    toggler.addEventListener('click', function () {
+      navMenu.classList.toggle('active');
     });
+  }
 
-    const consultaGuardada = await nuevaConsulta.save();
-    res.status(201).json(consultaGuardada);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  updateNavBar();
+
+  const usuarioLogueado = JSON.parse(localStorage.getItem('usuarioLogueado'));
+  const searchContainer = document.getElementById('search-container');
+  const notLoggedInMessage = document.getElementById('not-logged-in-message');
+
+  if (usuarioLogueado) {
+    if (searchContainer) searchContainer.style.display = 'block';
+    if (notLoggedInMessage) notLoggedInMessage.style.display = 'none';
+  } else {
+    if (searchContainer) searchContainer.style.display = 'none';
+    if (notLoggedInMessage) notLoggedInMessage.style.display = 'block';
+  }
+
+  const loginForm = document.querySelector('.sign-in-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const emailInput = document.getElementById('login-email');
+      const passwordInput = document.getElementById('login-password');
+
+      const correoInstitucional = emailInput.value;
+      const contraseña = passwordInput.value;
+
+      iniciarSesion(correoInstitucional, contraseña);
+    });
+  }
+
+  const registerForm = document.querySelector('.register-in-form');
+  if (registerForm) {
+    registerForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const nombreInput = document.getElementById('register-nombre');
+      const emailInput = document.getElementById('register-email');
+      const passwordInput = document.getElementById('register-password');
+      const patenteInput = document.getElementById('register-patente');
+      const telefonoInput = document.getElementById('register-telefono');
+
+      const usuario = {
+        nombre: nombreInput.value,
+        correoInstitucional: emailInput.value,
+        contraseña: passwordInput.value,
+        numeroPatente: patenteInput.value,
+        numeroTelefono: telefonoInput.value
+      };
+
+      registrarUsuario(usuario);
+    });
+  }
+
+  const searchForm = document.querySelector('.search-form');
+  if (searchForm) {
+    searchForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const usuarioLogueado = JSON.parse(localStorage.getItem('usuarioLogueado'));
+      if (!usuarioLogueado) {
+        alert('Debe iniciar sesión para buscar por patente.');
+        return;
+      }
+
+      const patenteInput = document.getElementById('patente-input');
+      const numeroPatente = patenteInput.value.trim();
+
+      if (numeroPatente) {
+        buscarPorPatente(numeroPatente);
+      }
+    });
   }
 });
 
-// Ruta para obtener todas las consultas registradas
-app.get('/consultasRegistradas', async (req, res) => {
-  try {
-    const consultas = await ConsultaRegistrada.find();
-    res.json(consultas);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+function updateNavBar() {
+  const userInfo = document.getElementById('user-info');
+  const usernameDisplay = document.getElementById('username-display');
+  const loginLink = document.getElementById('login-link');
+  const registroLink = document.getElementById('registro-link');
+  const logoutLink = document.getElementById('logout-link');
 
-//Ruta para buscar un usuario por número de patente
-app.get('/buscarPorPatente/:numeroPatente', async (req, res) => {
-  const numeroPatente = req.params.numeroPatente;
+  const usuario = JSON.parse(localStorage.getItem('usuarioLogueado'));
+
+  if (usuario) {
+    if (userInfo) userInfo.style.display = 'block';
+    if (usernameDisplay) usernameDisplay.textContent = usuario.nombre;
+    if (loginLink) loginLink.style.display = 'none';
+    if (registroLink) registroLink.style.display = 'none';
+    if (logoutLink) logoutLink.style.display = 'block';
+  } else {
+    if (userInfo) userInfo.style.display = 'none';
+    if (loginLink) loginLink.style.display = 'block';
+    if (registroLink) registroLink.style.display = 'block';
+    if (logoutLink) logoutLink.style.display = 'none';
+  }
+}
+
+window.logout = function () {
+  localStorage.removeItem('usuarioLogueado');
+  updateNavBar();
+  window.location.href = 'index.html';
+}
+
+async function iniciarSesion(correoInstitucional, contraseña) {
   try {
-    const usuarioEncontrado = await Usuario.findOne({ numeroPatente });
+    const response = await fetch('https://conexion-patentesd.onrender.com/usuarios');
+    if (!response.ok) {
+      throw new Error('Error en la respuesta de la red');
+    }
+
+    const usuarios = await response.json();
+    const usuarioEncontrado = usuarios.find(usuario =>
+      usuario.correoInstitucional === correoInstitucional &&
+      usuario.contraseña === contraseña
+    );
 
     if (usuarioEncontrado) {
-      res.json(usuarioEncontrado);
+      localStorage.setItem('usuarioLogueado', JSON.stringify(usuarioEncontrado));
+      alert('Inicio de sesión exitoso');
+      updateNavBar();
+      window.location.href = 'index.html';
     } else {
-      res.status(404).json({ message: 'Usuario no encontrado' });
+      alert('Error en el inicio de sesión: Credenciales inválidas');
     }
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error en el inicio de sesión: ' + error.message);
   }
-});
+}
 
-// Iniciar el servidor
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
-});
+async function registrarUsuario(usuario) {
+  try {
+    const response = await fetch('https://conexion-patentesd.onrender.com/usuarios', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(usuario)
+    });
+
+    if (!response.ok) {
+      throw new Error('Error en la respuesta de la red');
+    }
+
+    const data = await response.json();
+    alert('Registro exitoso');
+    window.location.href = 'login.html';
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error en el registro: ' + error.message);
+  }
+}
+
+async function buscarPorPatente(numeroPatente) {
+  try {
+    const usuarioLogueado = JSON.parse(localStorage.getItem('usuarioLogueado'));
+    if (!usuarioLogueado) {
+      alert('Debe iniciar sesión para buscar por patente.');
+      return;
+    }
+
+    // Buscar el usuario por número de patente
+    const response = await fetch(`https://conexion-patentesd.onrender.com/buscarPorPatente/${numeroPatente}`);
+    if (!response.ok) {
+      throw new Error('Error en la respuesta de la red');
+    }
+
+    const usuarioEncontrado = await response.json();
+
+    const resultadosDiv = document.getElementById('search-results');
+    resultadosDiv.innerHTML = ''; // Limpiar los resultados anteriores
+
+    if (usuarioEncontrado) {
+      resultadosDiv.style.display = 'block';
+      resultadosDiv.innerHTML = `
+        <p>Nombre: ${usuarioEncontrado.nombre}</p>
+        <p>Número de Teléfono: ${usuarioEncontrado.numeroTelefono}</p>
+        <p>Patente: ${usuarioEncontrado.numeroPatente}</p>
+      `;
+
+      // Registrar la consulta después de la búsqueda
+      await registrarConsulta(usuarioLogueado.correoInstitucional, numeroPatente);
+    } else {
+      resultadosDiv.style.display = 'block';
+      resultadosDiv.innerHTML = '<p>No se encontró ningún usuario con esa patente.</p>';
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error en la búsqueda: ' + error.message);
+  }
+}
+
+async function registrarConsulta(correoUsuario, numeroPatente) {
+  try {
+    const response = await fetch('https://conexion-patentesd.onrender.com/consultasRegistradas', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ correoUsuario, numeroPatente })
+    });
+
+    if (!response.ok) {
+      throw new Error('Error en la respuesta de la red');
+    }
+
+    const data = await response.json();
+    console.log('Consulta registrada:', data);
+  } catch (error) {
+    console.error('Error al registrar la consulta:', error);
+  }
+}
