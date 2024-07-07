@@ -55,9 +55,34 @@ app.get('/usuarios', async (req, res) => {
   }
 });
 
-// Ruta para registrar un nuevo usuario
+// Ruta para verificar si una patente ya existe
+app.get('/verificarPatente/:numeroPatente', async (req, res) => {
+  const { numeroPatente } = req.params;
+  try {
+    const usuarioExistente = await Usuario.findOne({ numeroPatente });
+    if (usuarioExistente) {
+      // La patente ya existe
+      res.status(200).json({ existe: true });
+    } else {
+      // La patente no existe
+      res.status(404).json({ existe: false });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Error al verificar la patente' });
+  }
+});
+
+// Ruta para registrar un nuevo usuario (modificada)
 app.post('/usuarios', async (req, res) => {
   try {
+    const { numeroPatente } = req.body;
+    
+    // Verificar si la patente ya existe
+    const usuarioExistente = await Usuario.findOne({ numeroPatente });
+    if (usuarioExistente) {
+      return res.status(400).json({ error: 'La patente ya está registrada' });
+    }
+
     const nuevoUsuario = new Usuario(req.body);
     const usuarioGuardado = await nuevoUsuario.save();
     res.status(201).json(usuarioGuardado);
@@ -106,6 +131,21 @@ app.get('/buscarPorPatente/:numeroPatente', async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Nueva ruta para verificar sesión
+app.post('/verificarSesion', async (req, res) => {
+  const { correoInstitucional } = req.body;
+  try {
+    const usuario = await Usuario.findOne({ correoInstitucional });
+    if (usuario) {
+      res.status(200).json({ valido: true });
+    } else {
+      res.status(401).json({ valido: false });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Error al verificar la sesión' });
   }
 });
 
